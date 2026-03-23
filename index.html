@@ -15,10 +15,44 @@ function ocrGo(input, side) {
   ocrProcessFile(input, side);
 }
 
+// ── API Key management ───────────────────────────────────────────────────
+function saveApiKey() {
+  const key = document.getElementById('apikey-input').value.trim();
+  if (!key || !key.startsWith('sk-ant-')) {
+    alert('Chiave non valida. Deve iniziare con sk-ant-');
+    return;
+  }
+  localStorage.setItem('anthropic_api_key', key);
+  document.getElementById('apikey-saved').style.display = 'block';
+  document.getElementById('apikey-input').value = '';
+  document.getElementById('apikey-input').placeholder = 'Chiave salvata ✓';
+  document.getElementById('apikey-banner').style.borderColor = '#a7f3d0';
+  document.getElementById('apikey-banner').style.background = '#f0faf5';
+  toast('Chiave API salvata!');
+}
+function getApiKey() {
+  return localStorage.getItem('anthropic_api_key') || '';
+}
+window.addEventListener('load', () => {
+  const key = getApiKey();
+  if (key) {
+    document.getElementById('apikey-input').placeholder = 'Chiave salvata ✓';
+    document.getElementById('apikey-saved').style.display = 'block';
+    document.getElementById('apikey-banner').style.borderColor = '#a7f3d0';
+    document.getElementById('apikey-banner').style.background = '#f0faf5';
+  }
+});
+
 async function ocrProcessFile(input, side) {
   if (!input.files || !input.files[0]) return;
-  const file = input.files[0];
 
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    alert('Inserisci prima la chiave API nella sezione in alto!');
+    return;
+  }
+
+  const file = input.files[0];
   const previewWrap = document.getElementById('ocr-preview-' + side + '-wrap');
   const previewImg  = document.getElementById('ocr-preview-' + side);
   const statusEl    = document.getElementById('ocr-status-' + side);
@@ -28,147 +62,78 @@ async function ocrProcessFile(input, side) {
     previewWrap.style.display = 'block';
     previewImg.src = e.target.result;
     statusEl.className = 'ocr-status loading';
-    statusEl.textContent = 'Lettura OCR in corso... (potrebbe richiedere 10-20 secondi)';
+    statusEl.textContent = 'Analisi AI in corso...';
+
+    const base64 = e.target.result.split(',')[1];
+    const mime   = file.type || 'image/jpeg';
+
+    const prompt = side === 'front'
+      ? 'Analizza il FRONTE di questa carta d identita italiana. Rispondi SOLO con JSON puro senza markdown: {"cognome_nome":"COGNOME NOME","data_nascita":"GG/MM/AAAA","luogo_nascita":"CITTA","comune_residenza":"COMUNE","via_residenza":"VIA NUMERO","cap":"CAP"} Se un campo non e visibile lascialo vuoto. Date in formato GG/MM/AAAA.'
+      : 'Analizza il RETRO di questa carta d identita italiana. Rispondi SOLO con JSON puro senza markdown: {"codice_fiscale":"CF","tipo_documento":"Carta d identita","numero_documento":"NUMERO","data_scadenza":"GG/MM/AAAA","rilasciato_da":"ENTE"} Se un campo non e visibile lascialo vuoto. Date in formato GG/MM/AAAA.';
 
     try {
-      // Load Tesseract if not already loaded
-      if (typeof Tesseract === 'undefined') {
-        await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
-      }
-
-      const result = await Tesseract.recognize(e.target.result, 'ita+eng', {
-        logger: m => {
-          if (m.status === 'recognizing text') {
-            statusEl.textContent = 'Lettura OCR: ' + Math.round(m.progress * 100) + '%';
-          }
-        }
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 400,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: mime, data: base64 } },
+              { type: 'text', text: prompt }
+            ]
+          }]
+        })
       });
 
-      const text = result.data.text;
-      console.log('OCR raw text:', text);
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error.message);
+      const text = data.content && data.content[0] ? data.content[0].text : '';
+      const match = text.match(/\{[\s\S]*\}/);
+      const parsed = JSON.parse(match ? match[0] : text.trim());
 
-      let parsed = {};
       if (side === 'front') {
-        parsed = parseFront(text);
         ocrDataFront = parsed;
-      } else {
-        parsed = parseBack(text);
-        ocrDataBack = parsed;
-      }
-
-      const filled = applyOcrData(parsed);
-
-      if (side === 'front') {
         frontDone = true;
         document.getElementById('ocr-side-back').classList.remove('ocr-side-disabled');
-        const backSide = document.getElementById('ocr-side-back');
-        backSide.classList.remove('ocr-side-disabled');
         document.getElementById('drop-back').style.borderColor = 'var(--pink)';
         document.getElementById('step-ind-1').classList.remove('active');
         document.getElementById('step-ind-1').classList.add('done');
         document.getElementById('step-ind-2').classList.add('active');
-        document.querySelector('.ocr-step-line').classList.add('done');
+        document.getElementById('line-1').classList.add('done');
       } else {
+        ocrDataBack = parsed;
         document.getElementById('step-ind-2').classList.remove('active');
         document.getElementById('step-ind-2').classList.add('done');
         document.getElementById('step-ind-3').classList.add('done');
-        document.querySelectorAll('.ocr-step-line')[1].classList.add('done');
+        document.getElementById('line-2').classList.add('done');
         showOcrSummary();
       }
 
+      const filled = applyOcrData(parsed);
       if (filled.length > 0) {
         statusEl.className = 'ocr-status success';
-        statusEl.innerHTML = 'Compilati: ' + filled.join(', ');
+        statusEl.innerHTML = 'Compilati: <strong>' + filled.join(', ') + '</strong>';
       } else {
         statusEl.className = 'ocr-status error';
-        statusEl.textContent = 'Pochi dati rilevati. Usa una foto piu nitida, ben illuminata e dritta.';
+        statusEl.textContent = 'Nessun dato trovato. Riprova con foto piu nitida.';
       }
 
     } catch(err) {
       statusEl.className = 'ocr-status error';
       statusEl.textContent = 'Errore: ' + err.message;
-      console.error(err);
     }
   };
   reader.readAsDataURL(file);
 }
 
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = src; s.onload = resolve; s.onerror = reject;
-    document.head.appendChild(s);
-  });
-}
-
-function parseFront(text) {
-  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 1);
-  const data = {};
-
-  // Cognome e Nome — cerca pattern COGNOME NOME o linee in maiuscolo
-  const nameMatch = text.match(/(?:COGNOME|Cognome)[:\s]+([A-Z][A-Z\s]+)/i) ||
-                    text.match(/(?:SURNAME|surname)[:\s]+([A-Z][A-Z\s]+)/i);
-  if (nameMatch) data.cognome_nome = nameMatch[1].trim();
-
-  // Cerca nome proprio
-  const givenMatch = text.match(/(?:NOME|Nome|NAME|Given)[:\s]+([A-Z][A-Z\s]+)/i);
-  if (givenMatch && data.cognome_nome) {
-    data.cognome_nome = data.cognome_nome + ' ' + givenMatch[1].trim();
-  } else if (givenMatch) {
-    data.cognome_nome = givenMatch[1].trim();
-  }
-
-  // Data di nascita GG/MM/AAAA o GG.MM.AAAA
-  const dateMatch = text.match(/(\d{1,2})[\.\/\-](\d{1,2})[\.\/\-](\d{4})/);
-  if (dateMatch) data.data_nascita = dateMatch[1].padStart(2,'0') + '/' + dateMatch[2].padStart(2,'0') + '/' + dateMatch[3];
-
-  // Luogo di nascita
-  const luogoMatch = text.match(/(?:nato|nata|luogo|born|LUOGO|BORN)[\s\S]{0,20}?([A-Z][A-Z\s]{2,20})/i);
-  if (luogoMatch) data.luogo_nascita = luogoMatch[1].trim();
-
-  // Comune residenza
-  const comuneMatch = text.match(/(?:residenza|residente|comune|COMUNE)[:\s]+([A-Z][A-Z\s]+)/i);
-  if (comuneMatch) data.comune_residenza = comuneMatch[1].trim();
-
-  // Via/indirizzo
-  const viaMatch = text.match(/(?:via|viale|corso|piazza|VIA|VIA)[\s]+([A-Za-z\s\d,]+)/i);
-  if (viaMatch) data.via_residenza = viaMatch[1].trim();
-
-  // CAP
-  const capMatch = text.match(/\b(\d{5})\b/);
-  if (capMatch) data.cap = capMatch[1];
-
-  return data;
-}
-
-function parseBack(text) {
-  const data = {};
-
-  // Codice Fiscale — 16 caratteri alfanumerici
-  const cfMatch = text.match(/\b([A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z])\b/i);
-  if (cfMatch) data.codice_fiscale = cfMatch[1].toUpperCase();
-
-  // Numero documento — lettera+7cifre o simili
-  const numMatch = text.match(/\b([A-Z]{2}[0-9]{7})\b/i) ||
-                   text.match(/\b([A-Z][A-Z0-9]{6,8})\b/);
-  if (numMatch) data.numero_documento = numMatch[1].toUpperCase();
-
-  // Date (scadenza)
-  const dates = [...text.matchAll(/(\d{1,2})[\.\/\-](\d{1,2})[\.\/\-](\d{4})/g)];
-  if (dates.length > 0) {
-    // Prendi l'ultima data trovata (solitamente la scadenza)
-    const d = dates[dates.length - 1];
-    data.data_scadenza = d[1].padStart(2,'0') + '/' + d[2].padStart(2,'0') + '/' + d[3];
-  }
-
-  // Ente rilascio
-  const enteMatch = text.match(/(?:comune|COMUNE|rilasciato|RILASCIATO|emesso|issued)[:\s]+([A-Za-z\s]+)/i);
-  if (enteMatch) data.rilasciato_da = enteMatch[1].trim().substring(0, 40);
-
-  data.tipo_documento = 'Carta d'identita';
-
-  return data;
-}
 
 function applyOcrData(parsed) {
   const filled = [];
@@ -709,6 +674,16 @@ function setSelect(id, value) {
   .ocr-drop-text { font-size: 0.9rem; font-weight: 500; color: var(--pink); margin-bottom: 0.25rem; }
   .ocr-drop-sub { font-size: 0.75rem; color: var(--muted); }
 
+
+  /* ── API Key field ── */
+  .apikey-banner { background: #fff8e1; border: 1.5px solid #ffd54f; border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; }
+  .apikey-banner-title { font-size: 0.88rem; font-weight: 600; color: #e65100; margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.4rem; }
+  .apikey-banner-sub { font-size: 0.78rem; color: #bf360c; margin-bottom: 0.75rem; line-height: 1.5; }
+  .apikey-row { display: flex; gap: 0.5rem; }
+  .apikey-input { flex: 1; padding: 0.6rem 0.85rem; border: 1.5px solid #ffd54f; border-radius: 8px; font-family: var(--font-mono, monospace); font-size: 0.78rem; color: var(--text); outline: none; background: #fff; }
+  .apikey-input:focus { border-color: var(--pink); }
+  .apikey-save-btn { padding: 0.6rem 1rem; background: var(--pink); color: #fff; border: none; border-radius: 8px; font-size: 0.82rem; font-weight: 500; cursor: pointer; white-space: nowrap; font-family: 'DM Sans',sans-serif; }
+  .apikey-saved { font-size: 0.75rem; color: #2d7a5a; margin-top: 0.4rem; display: none; }
 </style>
 </head>
 <body>
@@ -749,6 +724,17 @@ function setSelect(id, value) {
     <div class="card">
       <div class="card-title">Dati del Collaboratore Sportivo</div>
       <div class="card-sub">Sezione da compilare a cura del collaboratore sportivo</div>
+      <!-- ═══ API KEY ═══ -->
+      <div class="apikey-banner" id="apikey-banner">
+        <div class="apikey-banner-title">🔑 Chiave API richiesta per la scansione</div>
+        <div class="apikey-banner-sub">Inserisci la tua chiave API Anthropic — viene salvata solo nel tuo browser, non viene mai condivisa. Ottienila su <strong>console.anthropic.com/settings/keys</strong></div>
+        <div class="apikey-row">
+          <input class="apikey-input" type="password" id="apikey-input" placeholder="sk-ant-api03-..." autocomplete="off">
+          <button class="apikey-save-btn" onclick="saveApiKey()">Salva</button>
+        </div>
+        <div class="apikey-saved" id="apikey-saved">✓ Chiave salvata — la scansione è attiva!</div>
+      </div>
+      <!-- ════════════════════════════════ -->
       <!-- ═══ OCR CARTA D'IDENTITÀ ═══ -->
       <div class="ocr-card">
         <div class="ocr-title">Scansione Carta d'Identità</div>
