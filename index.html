@@ -10,12 +10,7 @@ let ocrDataFront = {};
 let ocrDataBack  = {};
 let frontDone    = false;
 
-function ocrFromCamera(side) {
-  document.getElementById('ocr-input-' + side + '-cam').click();
-}
-function ocrFromFile(side) {
-  document.getElementById('ocr-input-' + side + '-file').click();
-}
+// inputs are now directly inside label elements - no JS click needed
 
 async function ocrProcessFile(input, side) {
   if (!input.files || !input.files[0]) return;
@@ -63,8 +58,10 @@ async function ocrProcessFile(input, side) {
       if (side === 'front') {
         frontDone = true;
         document.getElementById('ocr-side-back').classList.remove('ocr-side-disabled');
-        document.getElementById('ocr-back-cam-btn').disabled = false;
-        document.getElementById('ocr-back-file-btn').disabled = false;
+        document.getElementById('ocr-back-cam-btn').style.opacity = '1';
+        document.getElementById('ocr-back-cam-btn').style.pointerEvents = 'auto';
+        document.getElementById('ocr-back-file-btn').style.opacity = '1';
+        document.getElementById('ocr-back-file-btn').style.pointerEvents = 'auto';
         document.getElementById('step-ind-1').classList.remove('active');
         document.getElementById('step-ind-1').classList.add('done');
         document.getElementById('step-ind-2').classList.add('active');
@@ -776,14 +773,16 @@ function setSelect(id, value) {
           </div>
           <div class="ocr-side-hint">Contiene: Nome, Cognome, Data e Luogo di nascita, Residenza</div>
           <div class="ocr-btns">
-            <button class="ocr-btn" onclick="ocrFromCamera('front')">
+            <label class="ocr-btn" style="cursor:pointer;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
               Fotocamera
-            </button>
-            <button class="ocr-btn" onclick="ocrFromFile('front')">
+              <input type="file" accept="image/*" capture="environment" style="display:none" onchange="ocrProcessFile(this,'front')">
+            </label>
+            <label class="ocr-btn" style="cursor:pointer;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               Carica foto
-            </button>
+              <input type="file" accept="image/*" style="display:none" onchange="ocrProcessFile(this,'front')">
+            </label>
           </div>
           <div class="ocr-preview-wrap" id="ocr-preview-front-wrap">
             <img class="ocr-preview-img" id="ocr-preview-front" src="" alt="Fronte">
@@ -799,14 +798,16 @@ function setSelect(id, value) {
           </div>
           <div class="ocr-side-hint">Contiene: Codice Fiscale, Numero documento, Scadenza, Ente rilascio</div>
           <div class="ocr-btns">
-            <button class="ocr-btn" id="ocr-back-cam-btn" onclick="ocrFromCamera('back')" disabled>
+            <label class="ocr-btn" id="ocr-back-cam-btn" style="cursor:pointer;opacity:0.4;pointer-events:none;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
               Fotocamera
-            </button>
-            <button class="ocr-btn" id="ocr-back-file-btn" onclick="ocrFromFile('back')" disabled>
+              <input type="file" accept="image/*" capture="environment" style="display:none" onchange="ocrProcessFile(this,'back')">
+            </label>
+            <label class="ocr-btn" id="ocr-back-file-btn" style="cursor:pointer;opacity:0.4;pointer-events:none;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               Carica foto
-            </button>
+              <input type="file" accept="image/*" style="display:none" onchange="ocrProcessFile(this,'back')">
+            </label>
           </div>
           <div class="ocr-preview-wrap" id="ocr-preview-back-wrap">
             <img class="ocr-preview-img" id="ocr-preview-back" src="" alt="Retro">
@@ -816,11 +817,6 @@ function setSelect(id, value) {
 
         <!-- RESULT SUMMARY -->
         <div class="ocr-summary" id="ocr-summary"></div>
-
-        <input type="file" id="ocr-input-front-file" accept="image/*" style="display:none" onchange="ocrProcessFile(this,'front')">
-        <input type="file" id="ocr-input-front-cam" accept="image/*" capture="environment" style="display:none" onchange="ocrProcessFile(this,'front')">
-        <input type="file" id="ocr-input-back-file" accept="image/*" style="display:none" onchange="ocrProcessFile(this,'back')">
-        <input type="file" id="ocr-input-back-cam" accept="image/*" capture="environment" style="display:none" onchange="ocrProcessFile(this,'back')">
       </div>
       <!-- ════════════════════════════════ -->
       <div class="field-grid">
