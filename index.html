@@ -5,34 +5,45 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AD/ACTION — Lettera di Incarico 2026</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
-// ── OCR Carta d'Identità ─────────────────────────────────────────────────
-function ocrFromCamera() {
-  document.getElementById('ocr-camera-input').click();
+// ── OCR Carta d'Identità — Fronte e Retro ───────────────────────────────
+let ocrDataFront = {};
+let ocrDataBack = {};
+let frontDone = false;
+
+function ocrFromCamera(side) {
+  document.getElementById('ocr-input-' + side + '-cam').click();
 }
-function ocrFromFile() {
-  document.getElementById('ocr-file-input').click();
+function ocrFromFile(side) {
+  document.getElementById('ocr-input-' + side + '-file').click();
 }
 
-async function ocrProcessFile(input) {
+async function ocrProcessFile(input, side) {
   if (!input.files || !input.files[0]) return;
   const file = input.files[0];
-  const btn = document.querySelectorAll('.ocr-btn');
-  btn.forEach(b => b.classList.add('scanning'));
-  btn.forEach(b => b.textContent = 'Analisi in corso...');
 
-  // Show preview
+  // Show preview immediately
+  const previewWrap = document.getElementById('ocr-preview-' + side + '-wrap');
+  const previewImg  = document.getElementById('ocr-preview-' + side);
+  const statusEl    = document.getElementById('ocr-status-' + side);
+
   const reader = new FileReader();
   reader.onload = async (e) => {
+    previewWrap.style.display = 'block';
+    previewImg.src = e.target.result;
     const base64 = e.target.result.split(',')[1];
-    const mime = file.type || 'image/jpeg';
+    const mime   = file.type || 'image/jpeg';
 
-    document.getElementById('ocr-preview').src = e.target.result;
-    document.getElementById('ocr-preview-wrap').style.display = 'block';
+    // Set scanning state
+    statusEl.className = 'ocr-status loading';
+    statusEl.textContent = 'Analisi AI in corso...';
 
-    const resultBox = document.getElementById('ocr-result');
-    resultBox.className = 'ocr-result';
-    resultBox.style.display = 'block';
-    resultBox.innerHTML = 'Lettura documento in corso con AI...';
+    const prompt = side === 'front'
+      ? `Analizza il FRONTE di questa carta d'identita italiana. Estrai SOLO questi dati e rispondi con JSON puro senza markdown:
+{"cognome_nome":"COGNOME NOME","data_nascita":"GG/MM/AAAA","luogo_nascita":"CITTA","comune_residenza":"COMUNE","via_residenza":"VIA E NUMERO","cap":"CAP"}
+Se un campo non e visibile metti stringa vuota. Date in formato GG/MM/AAAA.`
+      : `Analizza il RETRO di questa carta d'identita italiana. Estrai SOLO questi dati e rispondi con JSON puro senza markdown:
+{"codice_fiscale":"CF","tipo_documento":"Carta d identita","numero_documento":"NUMERO","data_scadenza":"GG/MM/AAAA","rilasciato_da":"COMUNE O ENTE"}
+Se un campo non e visibile metti stringa vuota. Date in formato GG/MM/AAAA.`;
 
     try {
       const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -40,20 +51,12 @@ async function ocrProcessFile(input) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
+          max_tokens: 500,
           messages: [{
             role: 'user',
             content: [
-              {
-                type: 'image',
-                source: { type: 'base64', media_type: mime, data: base64 }
-              },
-              {
-                type: 'text',
-                text: `Analizza questa immagine di un documento di identità italiano e estrai i dati. Rispondi SOLO con un oggetto JSON valido, senza testo aggiuntivo, senza markdown, senza backtick. Formato esatto:
-{"cognome_nome":"COGNOME NOME","data_nascita":"GG/MM/AAAA","luogo_nascita":"CITTA","codice_fiscale":"CF","comune_residenza":"","via_residenza":"","cap":"","tipo_documento":"Carta d identita","numero_documento":"NUMERO","data_scadenza":"GG/MM/AAAA","rilasciato_da":"ENTE"}
-Se un campo non e visibile lascialo stringa vuota. La data deve essere nel formato GG/MM/AAAA.`
-              }
+              { type: 'image', source: { type: 'base64', media_type: mime, data: base64 } },
+              { type: 'text', text: prompt }
             ]
           }]
         })
@@ -61,50 +64,88 @@ Se un campo non e visibile lascialo stringa vuota. La data deve essere nel forma
 
       const data = await response.json();
       const text = data.content?.[0]?.text || '';
-
-      let parsed;
+      let parsed = {};
       try {
-        parsed = JSON.parse(text.trim());
-      } catch {
         const match = text.match(/\{[\s\S]*\}/);
-        if (match) parsed = JSON.parse(match[0]);
-        else throw new Error('Formato risposta non valido');
+        parsed = JSON.parse(match ? match[0] : text.trim());
+      } catch(e) { throw new Error('Risposta AI non leggibile'); }
+
+      if (side === 'front') {
+        ocrDataFront = parsed;
+        frontDone = true;
+        // Enable back side
+        document.getElementById('ocr-side-back').classList.remove('ocr-side-disabled');
+        document.getElementById('ocr-back-cam-btn').disabled = false;
+        document.getElementById('ocr-back-file-btn').disabled = false;
+        // Update steps
+        document.getElementById('step-ind-1').classList.remove('active');
+        document.getElementById('step-ind-1').classList.add('done');
+        document.getElementById('step-ind-2').classList.add('active');
+        document.querySelector('.ocr-step-line').classList.add('done');
+      } else {
+        ocrDataBack = parsed;
+        // Update steps
+        document.getElementById('step-ind-2').classList.remove('active');
+        document.getElementById('step-ind-2').classList.add('done');
+        document.getElementById('step-ind-3').classList.add('done');
+        document.querySelectorAll('.ocr-step-line')[1].classList.add('done');
       }
 
-      // Fill fields
-      const filled = [];
-      if (parsed.cognome_nome) { setField('nome', parsed.cognome_nome); filled.push('Nome'); }
-      if (parsed.data_nascita) { setFieldDate('dataNascita', parsed.data_nascita); filled.push('Data nascita'); }
-      if (parsed.luogo_nascita) { setField('luogoNascita', parsed.luogo_nascita); filled.push('Luogo nascita'); }
-      if (parsed.codice_fiscale) { setField('cf', parsed.codice_fiscale.toUpperCase()); filled.push('Codice Fiscale'); }
-      if (parsed.comune_residenza) { setField('comune', parsed.comune_residenza); filled.push('Comune'); }
-      if (parsed.via_residenza) { setField('via', parsed.via_residenza); filled.push('Via'); }
-      if (parsed.cap) { setField('cap', parsed.cap); filled.push('CAP'); }
-      if (parsed.tipo_documento) { setSelect('tipoDoc', parsed.tipo_documento); filled.push('Tipo doc'); }
-      if (parsed.numero_documento) { setField('numDoc', parsed.numero_documento.toUpperCase()); filled.push('N. documento'); }
-      if (parsed.data_scadenza) { setFieldDate('scadDoc', parsed.data_scadenza); filled.push('Scadenza'); }
-      if (parsed.rilasciato_da) { setField('rilasciatoDoc', parsed.rilasciato_da); filled.push('Rilasciato da'); }
+      // Apply data to fields
+      const filled = applyOcrData(side === 'front' ? ocrDataFront : ocrDataBack);
 
-      syncAuto();
+      statusEl.className = 'ocr-status success';
+      statusEl.innerHTML = 'Trovati: ' + filled.map(f => '<strong>' + f + '</strong>').join(', ');
 
-      resultBox.className = 'ocr-result';
-      resultBox.innerHTML = filled.length
-        ? `Compilati automaticamente ${filled.length} campi:<div class="ocr-fields-found">${filled.map(f=>`<span class="ocr-field-tag">${f}</span>`).join('')}</div>`
-        : 'Nessun dato trovato nel documento. Riprova con una foto più nitida.';
+      // Show summary if both sides done
+      if (frontDone && side === 'back') {
+        showOcrSummary([...Object.keys(ocrDataFront).filter(k=>ocrDataFront[k]), ...Object.keys(ocrDataBack).filter(k=>ocrDataBack[k])]);
+      }
 
-    } catch (err) {
-      resultBox.className = 'ocr-result error';
-      resultBox.innerHTML = 'Errore nella lettura. Assicurati che la foto sia nitida e riprova.<br><small>' + err.message + '</small>';
+    } catch(err) {
+      statusEl.className = 'ocr-status error';
+      statusEl.textContent = 'Errore lettura. Usa una foto piu nitida e riprovare.';
     }
-
-    btn.forEach((b,i) => {
-      b.classList.remove('scanning');
-      b.innerHTML = i===0
-        ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Fotocamera'
-        : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Carica immagine';
-    });
   };
   reader.readAsDataURL(file);
+}
+
+function applyOcrData(parsed) {
+  const filled = [];
+  const map = {
+    cognome_nome:      ['nome',          false],
+    data_nascita:      ['dataNascita',   true],
+    luogo_nascita:     ['luogoNascita',  false],
+    codice_fiscale:    ['cf',            false],
+    comune_residenza:  ['comune',        false],
+    via_residenza:     ['via',           false],
+    cap:               ['cap',           false],
+    numero_documento:  ['numDoc',        false],
+    data_scadenza:     ['scadDoc',       true],
+    rilasciato_da:     ['rilasciatoDoc', false],
+    tipo_documento:    ['tipoDoc',       false, true],
+  };
+  for (const [key, [fieldId, isDate, isSelect]] of Object.entries(map)) {
+    if (!parsed[key]) continue;
+    if (isDate)        { setFieldDate(fieldId, parsed[key]); filled.push(fieldId); }
+    else if (isSelect) { setSelect(fieldId, parsed[key]); filled.push(fieldId); }
+    else               { setField(fieldId, parsed[key]); filled.push(fieldId); }
+  }
+  syncAuto();
+  return filled;
+}
+
+function showOcrSummary(keys) {
+  const labels = {
+    cognome_nome:'Nome', data_nascita:'Data nascita', luogo_nascita:'Luogo nascita',
+    codice_fiscale:'Codice Fiscale', comune_residenza:'Comune', via_residenza:'Via',
+    cap:'CAP', numero_documento:'N. Documento', data_scadenza:'Scadenza',
+    rilasciato_da:'Ente rilascio', tipo_documento:'Tipo doc'
+  };
+  const summary = document.getElementById('ocr-summary');
+  const tags = keys.map(k => '<span class="ocr-field-tag">' + (labels[k]||k) + '</span>').join('');
+  summary.style.display = 'block';
+  summary.innerHTML = '<div class="ocr-summary-title">Compilazione completata! Tutti i campi estratti:</div><div class="ocr-fields-found">' + tags + '</div>';
 }
 
 function setField(id, value) {
@@ -113,13 +154,11 @@ function setField(id, value) {
 }
 
 function setFieldDate(id, value) {
-  // Convert GG/MM/AAAA to AAAA-MM-GG for input[type=date]
   const el = document.getElementById(id);
   if (!el || !value) return;
   const parts = value.split('/');
   if (parts.length === 3) {
-    const iso = `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
-    el.value = iso;
+    el.value = parts[2] + '-' + parts[1].padStart(2,'0') + '-' + parts[0].padStart(2,'0');
   }
 }
 
@@ -129,8 +168,7 @@ function setSelect(id, value) {
   const v = value.toLowerCase();
   for (const opt of el.options) {
     if (opt.text.toLowerCase().includes(v) || v.includes(opt.text.toLowerCase())) {
-      el.value = opt.value;
-      return;
+      el.value = opt.value; return;
     }
   }
 }
@@ -555,19 +593,45 @@ function setSelect(id, value) {
   }
 
   /* ── OCR scanner ── */
-  .ocr-card { background: linear-gradient(135deg,#fff0f5 0%,#fff 60%); border: 2px dashed #fbb6cc; border-radius: 16px; padding: 1.5rem; margin-bottom: 1.5rem; }
+  .ocr-card { background: #fff; border: 2px dashed #fbb6cc; border-radius: 16px; padding: 1.5rem; margin-bottom: 1.5rem; }
   .ocr-title { font-size: 1rem; font-weight: 600; color: var(--dark); display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; }
   .ocr-title::before { content: ''; display: inline-block; width: 4px; height: 1rem; background: var(--pink); border-radius: 2px; }
-  .ocr-sub { font-size: 0.8rem; color: var(--muted); margin-bottom: 1rem; }
+  .ocr-sub { font-size: 0.8rem; color: var(--muted); margin-bottom: 1.25rem; }
+  /* steps */
+  .ocr-steps { display: flex; align-items: center; margin-bottom: 1.25rem; }
+  .ocr-step { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .ocr-step-num { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--border); background: #fff; color: var(--muted); font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; transition: all 0.3s; }
+  .ocr-step-label { font-size: 10px; font-weight: 600; color: var(--muted); letter-spacing: 0.05em; }
+  .ocr-step.active .ocr-step-num { border-color: var(--pink); background: var(--pink); color: #fff; }
+  .ocr-step.active .ocr-step-label { color: var(--pink); }
+  .ocr-step.done .ocr-step-num { border-color: #2ecc71; background: #2ecc71; color: #fff; }
+  .ocr-step.done .ocr-step-label { color: #2d7a5a; }
+  .ocr-step-line { flex: 1; height: 2px; background: var(--border); margin: 0 8px 14px; transition: background 0.3s; }
+  .ocr-step-line.done { background: #2ecc71; }
+  /* sides */
+  .ocr-side { border: 1px solid var(--border); border-radius: 12px; padding: 1rem; margin-bottom: 1rem; transition: all 0.3s; }
+  .ocr-side-disabled { opacity: 0.4; pointer-events: none; }
+  .ocr-side-title { font-size: 0.88rem; font-weight: 600; color: var(--dark); display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; }
+  .ocr-side-hint { font-size: 0.75rem; color: var(--muted); margin-bottom: 0.75rem; }
+  .ocr-side-badge { background: var(--pink); color: #fff; border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; }
+  .ocr-badge-back { background: #2b2b2b; }
+  /* btns */
   .ocr-btns { display: flex; gap: 0.75rem; flex-wrap: wrap; }
-  .ocr-btn { flex: 1; min-width: 140px; padding: 0.75rem 1rem; border-radius: 10px; border: 1.5px solid var(--pink); background: #fff; color: var(--pink); font-family: 'DM Sans',sans-serif; font-size: 0.88rem; font-weight: 500; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
-  .ocr-btn:hover { background: var(--pink); color: #fff; }
+  .ocr-btn { flex: 1; min-width: 120px; padding: 0.65rem 1rem; border-radius: 10px; border: 1.5px solid var(--pink); background: #fff; color: var(--pink); font-family: 'DM Sans',sans-serif; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
+  .ocr-btn:hover:not(:disabled) { background: var(--pink); color: #fff; }
+  .ocr-btn:disabled { border-color: var(--border); color: var(--muted); cursor: not-allowed; }
   .ocr-btn.scanning { background: var(--pink); color: #fff; opacity: 0.8; cursor: wait; }
-  #ocr-preview-wrap { margin-top: 1rem; display: none; }
-  #ocr-preview { width: 100%; max-height: 200px; object-fit: contain; border-radius: 10px; border: 1px solid var(--border); }
-  .ocr-result { margin-top: 0.75rem; background: #f0faf5; border: 1px solid #a7f3d0; border-radius: 10px; padding: 0.75rem 1rem; font-size: 0.82rem; color: #2d7a5a; line-height: 1.7; display: none; }
-  .ocr-result.error { background: #fff5f5; border-color: #fca5a5; color: #dc2626; }
-  .ocr-fields-found { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+  /* preview */
+  .ocr-preview-wrap { margin-top: 0.75rem; display: none; }
+  .ocr-preview-img { width: 100%; max-height: 160px; object-fit: contain; border-radius: 8px; border: 1px solid var(--border); }
+  .ocr-status { margin-top: 0.5rem; font-size: 0.8rem; padding: 0.5rem 0.75rem; border-radius: 8px; line-height: 1.6; }
+  .ocr-status.loading { background: #fff0f5; color: var(--pink); }
+  .ocr-status.success { background: #f0faf5; color: #2d7a5a; }
+  .ocr-status.error { background: #fff5f5; color: #dc2626; }
+  /* summary */
+  .ocr-summary { display: none; background: #f0faf5; border: 1.5px solid #a7f3d0; border-radius: 12px; padding: 1rem; margin-top: 0.5rem; }
+  .ocr-summary-title { font-size: 0.85rem; font-weight: 600; color: #2d7a5a; margin-bottom: 0.5rem; }
+  .ocr-fields-found { display: flex; flex-wrap: wrap; gap: 0.4rem; }
   .ocr-field-tag { background: #fff; border: 1px solid #a7f3d0; border-radius: 99px; padding: 2px 10px; font-size: 0.75rem; color: #2d7a5a; font-weight: 500; }
 
 </style>
@@ -613,23 +677,79 @@ function setSelect(id, value) {
       <!-- ═══ OCR CARTA D'IDENTITÀ ═══ -->
       <div class="ocr-card">
         <div class="ocr-title">Scansione Carta d'Identità</div>
-        <div class="ocr-sub">Fotografa o carica la carta d'identità — i campi si compilano automaticamente con l'AI</div>
-        <div class="ocr-btns">
-          <button class="ocr-btn" onclick="ocrFromCamera()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-            Fotocamera
-          </button>
-          <button class="ocr-btn" onclick="ocrFromFile()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            Carica immagine
-          </button>
+        <div class="ocr-sub">Scansiona <strong>fronte e retro</strong> — i campi si compilano automaticamente con l'AI</div>
+
+        <!-- STEP INDICATOR -->
+        <div class="ocr-steps">
+          <div class="ocr-step active" id="step-ind-1">
+            <div class="ocr-step-num">1</div>
+            <div class="ocr-step-label">FRONTE</div>
+          </div>
+          <div class="ocr-step-line"></div>
+          <div class="ocr-step" id="step-ind-2">
+            <div class="ocr-step-num">2</div>
+            <div class="ocr-step-label">RETRO</div>
+          </div>
+          <div class="ocr-step-line"></div>
+          <div class="ocr-step" id="step-ind-3">
+            <div class="ocr-step-num">✓</div>
+            <div class="ocr-step-label">FATTO</div>
+          </div>
         </div>
-        <input type="file" id="ocr-file-input" accept="image/*" style="display:none" onchange="ocrProcessFile(this)">
-        <input type="file" id="ocr-camera-input" accept="image/*" capture="environment" style="display:none" onchange="ocrProcessFile(this)">
-        <div id="ocr-preview-wrap">
-          <img id="ocr-preview" src="" alt="Anteprima documento">
-          <div class="ocr-result" id="ocr-result"></div>
+
+        <!-- FRONTE -->
+        <div class="ocr-side" id="ocr-side-front">
+          <div class="ocr-side-title">
+            <div class="ocr-side-badge">FRONTE</div>
+            Fotografa il lato con la foto del documento
+          </div>
+          <div class="ocr-side-hint">Contiene: Nome, Cognome, Data e Luogo di nascita, Residenza</div>
+          <div class="ocr-btns">
+            <button class="ocr-btn" onclick="ocrFromCamera('front')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              Fotocamera
+            </button>
+            <button class="ocr-btn" onclick="ocrFromFile('front')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Carica foto
+            </button>
+          </div>
+          <div class="ocr-preview-wrap" id="ocr-preview-front-wrap">
+            <img class="ocr-preview-img" id="ocr-preview-front" src="" alt="Fronte">
+            <div class="ocr-status" id="ocr-status-front"></div>
+          </div>
         </div>
+
+        <!-- RETRO -->
+        <div class="ocr-side ocr-side-disabled" id="ocr-side-back">
+          <div class="ocr-side-title">
+            <div class="ocr-side-badge ocr-badge-back">RETRO</div>
+            Fotografa il retro del documento
+          </div>
+          <div class="ocr-side-hint">Contiene: Codice Fiscale, Numero documento, Scadenza, Ente rilascio</div>
+          <div class="ocr-btns">
+            <button class="ocr-btn" id="ocr-back-cam-btn" onclick="ocrFromCamera('back')" disabled>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              Fotocamera
+            </button>
+            <button class="ocr-btn" id="ocr-back-file-btn" onclick="ocrFromFile('back')" disabled>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Carica foto
+            </button>
+          </div>
+          <div class="ocr-preview-wrap" id="ocr-preview-back-wrap">
+            <img class="ocr-preview-img" id="ocr-preview-back" src="" alt="Retro">
+            <div class="ocr-status" id="ocr-status-back"></div>
+          </div>
+        </div>
+
+        <!-- RESULT SUMMARY -->
+        <div class="ocr-summary" id="ocr-summary"></div>
+
+        <input type="file" id="ocr-input-front-file" accept="image/*" style="display:none" onchange="ocrProcessFile(this,'front')">
+        <input type="file" id="ocr-input-front-cam" accept="image/*" capture="environment" style="display:none" onchange="ocrProcessFile(this,'front')">
+        <input type="file" id="ocr-input-back-file" accept="image/*" style="display:none" onchange="ocrProcessFile(this,'back')">
+        <input type="file" id="ocr-input-back-cam" accept="image/*" capture="environment" style="display:none" onchange="ocrProcessFile(this,'back')">
       </div>
       <!-- ════════════════════════════════ -->
       <div class="field-grid">
