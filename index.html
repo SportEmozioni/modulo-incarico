@@ -10,7 +10,10 @@ let ocrDataFront = {};
 let ocrDataBack  = {};
 let frontDone    = false;
 
-// inputs are now directly inside label elements - no JS click needed
+function ocrGo(input, side) {
+  if (!input.files || !input.files[0]) return;
+  ocrProcessFile(input, side);
+}
 
 async function ocrProcessFile(input, side) {
   if (!input.files || !input.files[0]) return;
@@ -58,10 +61,9 @@ async function ocrProcessFile(input, side) {
       if (side === 'front') {
         frontDone = true;
         document.getElementById('ocr-side-back').classList.remove('ocr-side-disabled');
-        document.getElementById('ocr-back-cam-btn').style.opacity = '1';
-        document.getElementById('ocr-back-cam-btn').style.pointerEvents = 'auto';
-        document.getElementById('ocr-back-file-btn').style.opacity = '1';
-        document.getElementById('ocr-back-file-btn').style.pointerEvents = 'auto';
+        const backSide = document.getElementById('ocr-side-back');
+        backSide.classList.remove('ocr-side-disabled');
+        document.getElementById('drop-back').style.borderColor = 'var(--pink)';
         document.getElementById('step-ind-1').classList.remove('active');
         document.getElementById('step-ind-1').classList.add('done');
         document.getElementById('step-ind-2').classList.add('active');
@@ -701,6 +703,11 @@ function setSelect(id, value) {
   .ocr-summary-title { font-size: 0.85rem; font-weight: 600; color: #2d7a5a; margin-bottom: 0.5rem; }
   .ocr-fields-found { display: flex; flex-wrap: wrap; gap: 0.4rem; }
   .ocr-field-tag { background: #fff; border: 1px solid #a7f3d0; border-radius: 99px; padding: 2px 10px; font-size: 0.75rem; color: #2d7a5a; font-weight: 500; }
+  .ocr-dropzone { border: 2px dashed #fbb6cc; border-radius: 12px; padding: 1.5rem; text-align: center; cursor: pointer; transition: all 0.2s; background: #fff; margin-top: 0.5rem; }
+  .ocr-dropzone:hover, .ocr-dropzone:active { border-color: var(--pink); background: #fff0f5; }
+  .ocr-drop-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+  .ocr-drop-text { font-size: 0.9rem; font-weight: 500; color: var(--pink); margin-bottom: 0.25rem; }
+  .ocr-drop-sub { font-size: 0.75rem; color: var(--muted); }
 
 </style>
 </head>
@@ -745,45 +752,26 @@ function setSelect(id, value) {
       <!-- ═══ OCR CARTA D'IDENTITÀ ═══ -->
       <div class="ocr-card">
         <div class="ocr-title">Scansione Carta d'Identità</div>
-        <div class="ocr-sub">Scansiona <strong>fronte e retro</strong> — i campi si compilano automaticamente con l'AI</div>
+        <div class="ocr-sub">Scansiona <strong>fronte e retro</strong> — i campi si compilano automaticamente</div>
 
-        <!-- STEP INDICATOR -->
         <div class="ocr-steps">
-          <div class="ocr-step active" id="step-ind-1">
-            <div class="ocr-step-num">1</div>
-            <div class="ocr-step-label">FRONTE</div>
-          </div>
-          <div class="ocr-step-line"></div>
-          <div class="ocr-step" id="step-ind-2">
-            <div class="ocr-step-num">2</div>
-            <div class="ocr-step-label">RETRO</div>
-          </div>
-          <div class="ocr-step-line"></div>
-          <div class="ocr-step" id="step-ind-3">
-            <div class="ocr-step-num">✓</div>
-            <div class="ocr-step-label">FATTO</div>
-          </div>
+          <div class="ocr-step active" id="step-ind-1"><div class="ocr-step-num">1</div><div class="ocr-step-label">FRONTE</div></div>
+          <div class="ocr-step-line" id="line-1"></div>
+          <div class="ocr-step" id="step-ind-2"><div class="ocr-step-num">2</div><div class="ocr-step-label">RETRO</div></div>
+          <div class="ocr-step-line" id="line-2"></div>
+          <div class="ocr-step" id="step-ind-3"><div class="ocr-step-num">✓</div><div class="ocr-step-label">FATTO</div></div>
         </div>
 
         <!-- FRONTE -->
         <div class="ocr-side" id="ocr-side-front">
-          <div class="ocr-side-title">
-            <div class="ocr-side-badge">FRONTE</div>
-            Fotografa il lato con la foto del documento
+          <div class="ocr-side-title"><div class="ocr-side-badge">FRONTE</div> Lato con la foto</div>
+          <div class="ocr-side-hint">Nome, Cognome, Data e Luogo di nascita, Residenza</div>
+          <div class="ocr-dropzone" id="drop-front" onclick="document.getElementById('inp-front').click()">
+            <div class="ocr-drop-icon">📷</div>
+            <div class="ocr-drop-text">Tocca qui per fotografare o caricare</div>
+            <div class="ocr-drop-sub">Supporta foto da fotocamera, gallery o file</div>
           </div>
-          <div class="ocr-side-hint">Contiene: Nome, Cognome, Data e Luogo di nascita, Residenza</div>
-          <div class="ocr-btns">
-            <label class="ocr-btn" style="cursor:pointer;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-              Fotocamera
-              <input type="file" accept="image/*" capture="environment" style="display:none" onchange="ocrProcessFile(this,'front')">
-            </label>
-            <label class="ocr-btn" style="cursor:pointer;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              Carica foto
-              <input type="file" accept="image/*" style="display:none" onchange="ocrProcessFile(this,'front')">
-            </label>
-          </div>
+          <input type="file" id="inp-front" accept="image/*" style="position:absolute;opacity:0;width:1px;height:1px;top:0;left:0;" onchange="ocrGo(this,'front')">
           <div class="ocr-preview-wrap" id="ocr-preview-front-wrap">
             <img class="ocr-preview-img" id="ocr-preview-front" src="" alt="Fronte">
             <div class="ocr-status" id="ocr-status-front"></div>
@@ -792,30 +780,20 @@ function setSelect(id, value) {
 
         <!-- RETRO -->
         <div class="ocr-side ocr-side-disabled" id="ocr-side-back">
-          <div class="ocr-side-title">
-            <div class="ocr-side-badge ocr-badge-back">RETRO</div>
-            Fotografa il retro del documento
+          <div class="ocr-side-title"><div class="ocr-side-badge ocr-badge-back">RETRO</div> Lato con il codice fiscale</div>
+          <div class="ocr-side-hint">Codice Fiscale, Numero documento, Scadenza, Ente rilascio</div>
+          <div class="ocr-dropzone" id="drop-back" onclick="document.getElementById('inp-back').click()">
+            <div class="ocr-drop-icon">📋</div>
+            <div class="ocr-drop-text">Tocca qui per fotografare o caricare il retro</div>
+            <div class="ocr-drop-sub">Si sblocca dopo aver scansionato il fronte</div>
           </div>
-          <div class="ocr-side-hint">Contiene: Codice Fiscale, Numero documento, Scadenza, Ente rilascio</div>
-          <div class="ocr-btns">
-            <label class="ocr-btn" id="ocr-back-cam-btn" style="cursor:pointer;opacity:0.4;pointer-events:none;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-              Fotocamera
-              <input type="file" accept="image/*" capture="environment" style="display:none" onchange="ocrProcessFile(this,'back')">
-            </label>
-            <label class="ocr-btn" id="ocr-back-file-btn" style="cursor:pointer;opacity:0.4;pointer-events:none;">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              Carica foto
-              <input type="file" accept="image/*" style="display:none" onchange="ocrProcessFile(this,'back')">
-            </label>
-          </div>
+          <input type="file" id="inp-back" accept="image/*" style="position:absolute;opacity:0;width:1px;height:1px;top:0;left:0;" onchange="ocrGo(this,'back')">
           <div class="ocr-preview-wrap" id="ocr-preview-back-wrap">
             <img class="ocr-preview-img" id="ocr-preview-back" src="" alt="Retro">
             <div class="ocr-status" id="ocr-status-back"></div>
           </div>
         </div>
 
-        <!-- RESULT SUMMARY -->
         <div class="ocr-summary" id="ocr-summary"></div>
       </div>
       <!-- ════════════════════════════════ -->
