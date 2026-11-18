@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AD/ACTION — Lettera di Incarico 2026</title>
+<title>AD/ACTION — Lettera di Incarico 2027</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Dancing+Script:wght@600&family=Pacifico&family=Caveat:wght@600&family=Sacramento&family=Satisfy&family=Petit+Formal+Script&display=swap');
@@ -17,6 +17,7 @@
     --text:       #2b2b2b;
     --muted:      #888888;
     --success:    #2ecc71;
+    --error:      #d93025;
     --field-bg:   #ffffff;
     --section-bg: #fafafa;
   }
@@ -223,6 +224,23 @@
   input.autofilled { background: #f0f7ff; border-color: #93c5fd; color: #1e40af; }
   textarea { resize: vertical; min-height: 80px; }
 
+  /* ── campi non validi ── */
+  input.invalid, select.invalid, .sig-name-input.invalid {
+    border-color: var(--error) !important;
+    background: #fff5f5;
+    box-shadow: 0 0 0 3px rgba(217,48,37,0.10);
+  }
+  .check-group.invalid .check-opt {
+    border-color: var(--error);
+    background: #fff5f5;
+  }
+  .req-note {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+  .req-note .req { color: var(--pink); font-weight: 600; }
+
   /* ── checkbox options ── */
   .check-group { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.25rem; }
   .check-opt {
@@ -410,8 +428,10 @@
     font-size: 0.85rem;
     opacity: 0; transition: opacity 0.3s;
     pointer-events: none; z-index: 999;
+    max-width: 92vw; text-align: center;
   }
   #toast.show { opacity: 1; }
+  #toast.error { background: var(--error); }
 
   @media (max-width: 600px) {
     .field-grid { grid-template-columns: 1fr; }
@@ -432,7 +452,7 @@
     <div class="logo-sub">SportEmozioni</div>
   </div>
   <div class="header-doc">
-    <p><strong>Lettera di Incarico</strong><br>Lavoratore Sportivo &middot; Anno 2026</p>
+    <p><strong>Lettera di Incarico</strong><br>Lavoratore Sportivo &middot; Anno 2027</p>
   </div>
   <div class="header-actions">
     <div class="progress-pill">Sezione <strong id="cur-step">1</strong> di 4</div>
@@ -462,6 +482,7 @@
     <div class="card">
       <div class="card-title">Dati del Collaboratore Sportivo</div>
       <div class="card-sub">Sezione da compilare a cura del collaboratore sportivo</div>
+      <p class="req-note">Tutti i campi sono obbligatori <span class="req">*</span></p>
       <div class="field-grid">
         <div class="field span2">
           <label>Cognome e Nome <span class="req">*</span></label>
@@ -484,7 +505,7 @@
           <input type="text" id="comune" placeholder="Es. Trento" oninput="syncAuto()">
         </div>
         <div class="field" style="grid-column: span 1;">
-          <label>CAP – Provincia</label>
+          <label>CAP – Provincia <span class="req">*</span></label>
           <input type="text" id="cap" placeholder="Es. 38100 TN">
         </div>
         <div class="field span2">
@@ -492,15 +513,15 @@
           <input type="text" id="via" placeholder="Es. Via Roma 10" oninput="syncAuto()">
         </div>
         <div class="field">
-          <label>Telefono / Cellulare</label>
+          <label>Telefono / Cellulare <span class="req">*</span></label>
           <input type="text" id="tel" placeholder="+39 340 000 0000">
         </div>
         <div class="field">
-          <label>E-mail</label>
+          <label>E-mail <span class="req">*</span></label>
           <input type="email" id="email" placeholder="mario.rossi@email.it">
         </div>
         <div class="field span2">
-          <label>IBAN (per bonifico)</label>
+          <label>IBAN (per bonifico) <span class="req">*</span></label>
           <input type="text" id="iban" placeholder="IT60 X054 2811 1010 0000 0123 456" style="text-transform:uppercase; letter-spacing:0.06em; font-size:0.85rem;">
         </div>
         <div class="field span2">
@@ -523,7 +544,7 @@
   <div class="section" id="s1">
     <div class="card">
       <div class="card-title">Dichiarazioni del Collaboratore</div>
-      <div class="card-sub">Seleziona le opzioni applicabili (puoi selezionare più opzioni)</div>
+      <div class="card-sub">Seleziona lo stato occupazionale (una sola opzione). La copertura previdenziale va barrata solo se applicabile.</div>
 
       <label style="margin-bottom:0.6rem;display:block;">Stato occupazionale <span class="req">*</span></label>
       <div class="check-group" id="chk-stato">
@@ -539,7 +560,7 @@
         </div>
       </div>
 
-      <label style="margin:1.25rem 0 0.6rem;display:block;">Copertura previdenziale</label>
+      <label style="margin:1.25rem 0 0.6rem;display:block;">Copertura previdenziale <span style="text-transform:none;letter-spacing:0;font-weight:400;">(se applicabile)</span></label>
       <div class="check-group" id="chk-prev">
         <div class="check-opt" onclick="toggleCheck(this)">
           <input type="checkbox" value="copertura">
@@ -571,7 +592,7 @@
           <input type="date" id="scadDoc">
         </div>
         <div class="field">
-          <label>Rilasciato da</label>
+          <label>Rilasciato da <span class="req">*</span></label>
           <input type="text" id="rilasciatoDoc" placeholder="Es. Comune di Trento">
         </div>
       </div>
@@ -720,7 +741,7 @@ let currentStep = 0;
 const stepBtns = document.querySelectorAll('.step-btn');
 const sections = document.querySelectorAll('.section');
 
-function goTo(i) {
+function showStep(i) {
   currentStep = i;
   sections.forEach((s,j) => s.classList.toggle('active', j===i));
   stepBtns.forEach((b,j) => {
@@ -733,13 +754,149 @@ function goTo(i) {
   if(i===3) buildSummary();
 }
 
+// Navigazione: per andare avanti tutte le sezioni precedenti devono essere complete
+function goTo(i) {
+  if (i > currentStep) {
+    for (let s = 0; s < i; s++) {
+      const errors = validateStep(s);
+      if (errors.length) {
+        showStep(s);
+        toast(errors[0], true);
+        scrollToFirstInvalid();
+        return;
+      }
+    }
+  }
+  showStep(i);
+}
+
 // ── Checkboxes ────────────────────────────────────────────────────────────
 function toggleCheck(el) {
   // Toggle selected state — called via onclick on the wrapper div (not label)
-  el.classList.toggle('selected');
+  const group = el.parentElement;
+  const willSelect = !el.classList.contains('selected');
+  // Stato occupazionale: le due opzioni si escludono a vicenda
+  if (group.id === 'chk-stato' && willSelect) {
+    group.querySelectorAll('.check-opt').forEach(o => {
+      o.classList.remove('selected');
+      const c = o.querySelector('input[type=checkbox]');
+      if (c) c.checked = false;
+    });
+  }
+  el.classList.toggle('selected', willSelect);
   const cb = el.querySelector('input[type=checkbox]');
-  if (cb) cb.checked = el.classList.contains('selected');
+  if (cb) cb.checked = willSelect;
+  group.classList.remove('invalid');
 }
+
+// ── Validazione campi obbligatori ─────────────────────────────────────────
+const REQUIRED_FIELDS = {
+  0: [
+    ['nome',          'Cognome e Nome'],
+    ['dataNascita',   'Data di nascita'],
+    ['luogoNascita',  'Luogo di nascita'],
+    ['cf',            'Codice Fiscale'],
+    ['comune',        'Residenza – Comune'],
+    ['cap',           'CAP – Provincia'],
+    ['via',           'Residenza – Via / Piazza'],
+    ['tel',           'Telefono / Cellulare'],
+    ['email',         'E-mail'],
+    ['iban',          'IBAN'],
+    ['disciplina',    'Disciplina Sportiva'],
+    ['ruolo',         'Ruolo / Qualifica'],
+  ],
+  1: [
+    ['tipoDoc',       'Tipo documento'],
+    ['numDoc',        'Numero documento'],
+    ['scadDoc',       'Data di scadenza'],
+    ['rilasciatoDoc', 'Rilasciato da'],
+  ],
+  2: [
+    ['sig-name-input','Nome per la firma'],
+  ],
+};
+
+function markInvalid(el) { if (el) el.classList.add('invalid'); }
+
+function validateStep(step) {
+  const errors = [];
+
+  // Campi di testo / data / select
+  (REQUIRED_FIELDS[step] || []).forEach(([id, label]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('invalid');
+    if (!el.value.trim()) {
+      markInvalid(el);
+      errors.push(`Campo obbligatorio mancante: ${label}`);
+    }
+  });
+
+  // Controlli di formato (solo se il campo non è già vuoto)
+  if (step === 0) {
+    const cf = document.getElementById('cf');
+    if (cf.value.trim() && !/^[A-Z0-9]{16}$/.test(cf.value.trim().toUpperCase())) {
+      markInvalid(cf);
+      errors.push('Codice Fiscale non valido (16 caratteri)');
+    }
+    const email = document.getElementById('email');
+    if (email.value.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())) {
+      markInvalid(email);
+      errors.push('E-mail non valida');
+    }
+    const iban = document.getElementById('iban');
+    const ibanClean = iban.value.replace(/\s+/g, '');
+    if (ibanClean && !/^[A-Za-z]{2}[0-9A-Za-z]{13,32}$/.test(ibanClean)) {
+      markInvalid(iban);
+      errors.push('IBAN non valido');
+    }
+    const tel = document.getElementById('tel');
+    if (tel.value.trim() && tel.value.replace(/\D/g, '').length < 6) {
+      markInvalid(tel);
+      errors.push('Numero di telefono non valido');
+    }
+  }
+
+  // Gruppi di checkbox
+  if (step === 1) {
+    const stato = document.getElementById('chk-stato');
+    stato.classList.remove('invalid');
+    if (!stato.querySelector('.check-opt.selected')) {
+      stato.classList.add('invalid');
+      errors.push('Seleziona lo stato occupazionale');
+    }
+    const idg = document.getElementById('chk-id');
+    idg.classList.remove('invalid');
+    if (idg.querySelectorAll('.check-opt.selected').length < 2) {
+      idg.classList.add('invalid');
+      errors.push('Le due dichiarazioni obbligatorie vanno entrambe confermate');
+    }
+  }
+
+  return errors;
+}
+
+function validateAll() {
+  for (let s = 0; s <= 2; s++) {
+    const errors = validateStep(s);
+    if (errors.length) return { step: s, errors };
+  }
+  return null;
+}
+
+function scrollToFirstInvalid() {
+  setTimeout(() => {
+    const el = document.querySelector('.section.active .invalid');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 80);
+}
+
+// Togli l'evidenziazione rossa appena l'utente interviene sul campo
+['input','change'].forEach(evt =>
+  document.addEventListener(evt, e => {
+    if (e.target && e.target.classList) e.target.classList.remove('invalid');
+  })
+);
 
 // ── Signature system — text + calligraphy style ──────────────────────────
 const SIG_FONTS = [
@@ -878,13 +1035,26 @@ function isCanvasBlank(canvas) {
   return canvas.toDataURL() === blank.toDataURL();
 }
 
-function toast(msg) {
+let toastTimer;
+function toast(msg, isError) {
   const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
+  t.textContent = msg;
+  t.classList.toggle('error', !!isError);
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), isError ? 4500 : 2500);
 }
 
 function generatePDF() {
+  // Tutti i campi obbligatori devono essere compilati prima del download
+  const problem = validateAll();
+  if (problem) {
+    showStep(problem.step);
+    toast(problem.errors[0], true);
+    scrollToFirstInvalid();
+    return;
+  }
+
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const W = 210, H = 297, M = 20, TW = 170;
@@ -947,7 +1117,7 @@ function generatePDF() {
   function footer(n) {
     doc.setFillColor(...LIGHT_GRAY); doc.rect(0,H-14,W,14,'F');
     sf(7,'normal',GRAY);
-    doc.text(`AD/ACTION ASD - Via Trento, 10 - 38097 Terre d'Adige (TN) - CF e P.IVA 02326510225`, W/2, H-5, {align:'center'});
+    doc.text(`AD/ACTION SPORTEMOZIONI - Via per Zambana Vecchia, 3 - 38067 Terre d'Adige (TN) - CF e P.IVA 02326510225`, W/2, H-5, {align:'center'});
     doc.text(`Pagina ${n} / 6`, W-M, H-5, {align:'right'});
   }
 
@@ -1007,7 +1177,7 @@ function generatePDF() {
   y=checkRow(chkPrev,   `di avere gia in essere altra copertura previdenziale`, M+2, y); y+=4;
   hLine(y); y+=7;
   sf(8.5,'normal',DARK);
-  y=wt(`Tra AD/ACTION Associazione Sportiva Dilettantistica con sede in TERRE D'ADIGE, Via Trento n.10, nella persona del Sig. Aldrighetti Daniele che agisce nel presente contratto nella qualita di legale rappresentante, di seguito per brevita denominata AD/ACTION ASD`, M, y, TW, 5)+5;
+  y=wt(`Tra AD/ACTION SPORTEMOZIONI Associazione Sportiva Dilettantistica con sede in TERRE D'ADIGE (TN), Via per Zambana Vecchia n.3, 38067, nella persona del Sig. Aldrighetti Daniele che agisce nel presente contratto nella qualita di legale rappresentante, di seguito per brevita denominata AD/ACTION SPORTEMOZIONI`, M, y, TW, 5)+5;
   sf(9,'bold',DARK); doc.text(`E`, W/2, y, {align:'center'}); y+=6;
 
   sf(8,'bold',GRAY); doc.text(`IL/LA COLLABORATORE`, M, y); y+=5;
@@ -1046,7 +1216,7 @@ function generatePDF() {
     [`ART. 3 - IMPEGNI DEL COLLABORATORE`, `Il Collaboratore si impegna alla dovuta riservatezza circa i metodi seguiti nello svolgimento dell'incarico affidatogli e a non fare uso in alcun modo dei dati e notizie relative agli atleti dell'ENTE. Si impegna a svolgere con la massima diligenza l'incarico, a rispettare i regolamenti vigenti, in particolare quelli riferiti alla tutela degli atleti e alla lotta al doping.`],
     [`ART. 4 - PRESTAZIONI`, `Il Collaboratore dovra dirigere personalmente le attivita prestabilite sulla base dei programmi tecnici concordati. Egli sara libero di autodeterminarsi le modalita di tempo e di luogo delle prestazioni pur nel rispetto dei programmi concordati tra le parti.`],
     [`ART. 5 - COMPENSO DEL COLLABORATORE`, `Le parti ritengono che l'emolumento corrisposto per il periodo di durata del presente contratto sara pari ad un importo NON SUPERIORE A CINQUEMILA EURO (EUR 5.000) annui al lordo della percentuale di contributi previdenziali. Il compenso sara erogato a mezzo bonifico su un conto corrente intestato al collaboratore.`],
-    [`ART. 6 - DURATA DELL'INCARICO`, `Il presente contratto ha validita per l'Anno Sportivo 2026, in cui scade automaticamente, essendo il rinnovo implicito espressamente escluso.`],
+    [`ART. 6 - DURATA DELL'INCARICO`, `Il presente contratto ha validita per l'Anno Sportivo 2027, in cui scade automaticamente, essendo il rinnovo implicito espressamente escluso.`],
   ];
   for(const [title,text] of arts3){
     sf(9,'bold',DARK); doc.text(title, M, y); y+=5;
@@ -1135,7 +1305,7 @@ function generatePDF() {
   footer(6);
 
   // ── Save
-  const fname = `Incarico_AdAction_2026_${(d.nome||'collaboratore').replace(/\s+/g,'_')}.pdf`;
+  const fname = `Incarico_AdAction_2027_${(d.nome||'collaboratore').replace(/\s+/g,'_')}.pdf`;
   doc.save(fname);
   toast(`PDF scaricato: ${fname}`);
 }
